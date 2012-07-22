@@ -315,7 +315,7 @@ void *Loader::load_driver(const char* kind, const char *tag,
          */
         const char *cmdline = getProcessCmdline();
         if (strstr(cmdline, "systemui")) {
-            void *imgegl = dlopen("/vendor/lib/libIMGegl.so", RTLD_LAZY);
+            void *imgegl = dlopen("/system/lib/libIMGegl.so", RTLD_LAZY);
             if (imgegl) {
                 unsigned int *PVRDefaultPBS =
                         (unsigned int *)dlsym(imgegl, "PVRDefaultPBS");
