@@ -34,10 +34,20 @@ class Layer;
 class SurfaceTextureLayer : public BufferQueue
 {
 public:
-    SurfaceTextureLayer();
+    SurfaceTextureLayer(const sp<Layer>& layer);
     ~SurfaceTextureLayer();
 
+	bool     usehwcomposer;
+    bool     usehwinit;
+     wp<Layer>  mLayer;
+     
     virtual status_t connect(int api, QueueBufferOutput* output);
+   
+
+    virtual status_t disconnect(int api);
+
+    virtual int      setParameter(uint32_t cmd,uint32_t value);
+    virtual uint32_t getParameter(uint32_t cmd);
 };
 
 // ---------------------------------------------------------------------------

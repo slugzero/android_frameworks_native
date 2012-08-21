@@ -30,7 +30,7 @@
 #include <ui/PixelFormat.h>
 
 #include <gui/Surface.h>
-
+#include <gui/ISurfaceClient.h>
 namespace android {
 
 // ---------------------------------------------------------------------------
@@ -129,6 +129,9 @@ public:
     status_t    setSize(SurfaceID id, uint32_t w, uint32_t h);
     status_t    setCrop(SurfaceID id, const Rect& crop);
     status_t    destroySurface(SurfaceID sid);
+    static int  setDisplayProp(int cmd,int param0,int param1,int param2);
+    static int  getDisplayProp(int cmd,int param0,int param1);
+	static void		registerSurfaceClient(const sp<ISurfaceClient>& client);
 
 private:
     virtual void onFirstRef();

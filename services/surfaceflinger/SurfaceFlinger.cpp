@@ -37,6 +37,7 @@
 #include <binder/PermissionCache.h>
 
 #include <gui/IDisplayEventConnection.h>
+#include <gui/ISurfaceClient.h>
 
 #include <utils/String8.h>
 #include <utils/String16.h>
@@ -277,8 +278,8 @@ status_t SurfaceFlinger::readyToRun()
     mServerCblk->connected |= 1<<dpy;
     display_cblk_t* dcblk = mServerCblk->displays + dpy;
     memset(dcblk, 0, sizeof(display_cblk_t));
-    dcblk->w            = plane.getWidth();
-    dcblk->h            = plane.getHeight();
+    dcblk->w            = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+    dcblk->h            = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
     dcblk->format       = f;
     dcblk->orientation  = ISurfaceComposer::eOrientationDefault;
     dcblk->xdpi         = hw.getDpiX();
@@ -286,6 +287,9 @@ status_t SurfaceFlinger::readyToRun()
     dcblk->fps          = hw.getRefreshRate();
     dcblk->density      = hw.getDensity();
 
+    mDispWidth = dcblk->w;
+    mDispHeight = dcblk->h;
+    mSetDispSize = 0;
     // Initialize OpenGL|ES
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glPixelStorei(GL_PACK_ALIGNMENT, 4);
@@ -478,6 +482,7 @@ void SurfaceFlinger::onMessageReceived(int32_t what)
                 handleRepaint();
                 // inform the h/w that we're done compositing
                 hw.compositionComplete();
+        NotifyFramebufferChanged_l(SURFACECLIENT_MSG_FBCHANGED,0);
                 postFramebuffer();
             } else {
                 // pretend we did the post
@@ -815,6 +820,27 @@ void SurfaceFlinger::invalidateHwcGeometry()
     mHwWorkListDirty = true;
 }
 
+int SurfaceFlinger::setDisplayParameter(uint32_t cmd,uint32_t  value)
+{
+    HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        return hwc.setParameter(cmd,value);
+    }
+
+    return NO_ERROR;
+}
+
+uint32_t SurfaceFlinger::getDisplayParameter(uint32_t cmd)
+{
+    HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        return hwc.getParameter(cmd);
+    }
+
+    return NO_ERROR;
+}
 bool SurfaceFlinger::lockPageFlip(const LayerVector& currentLayers)
 {
     bool recomputeVisibleRegions = false;
@@ -1227,6 +1253,58 @@ void SurfaceFlinger::setTransactionState(const Vector<ComposerState>& state,
     }
 }
 
+int SurfaceFlinger::setDisplayProp(int cmd,int param0,int param1,int param2)
+{
+    int ret = 0;
+    const DisplayHardware& hw(graphicPlane(0).displayHardware());
+    ret = hw.setDispProp(cmd,param0,param1,param2);
+    
+    if(cmd == DISPLAY_CMD_SETDISPMODE)
+    {
+        if(ret >= 0)
+        {
+             HWComposer& hwc(graphicPlane(0).displayHardware().getHwComposer());
+             int hwc_mode = 0;
+             
+             if((param0 == DISPLAY_MODE_SINGLE) || (param0 == DISPLAY_MODE_SINGLE_VAR_FE) || (param0 == DISPLAY_MODE_SINGLE_FB_VAR))
+             {
+                 hwc_mode = HWC_MODE_SCREEN0;
+             }
+             else if(param0 == DISPLAY_MODE_DUALSAME)
+             {
+                 hwc_mode = HWC_MODE_SCREEN0_TO_SCREEN1;
+             }
+             else if(param0 == DISPLAY_MODE_DUALSAME_TWO_VIDEO)
+             {
+                 hwc_mode = HWC_MODE_SCREEN0_AND_SCREEN1;
+             }
+             else if(param0 == DISPLAY_MODE_SINGLE_VAR_BE)
+             {
+                hwc_mode = HWC_MODE_SCREEN0_BE;
+             }
+             else if(param0 == DISPLAY_MODE_SINGLE_VAR_GPU)
+             {
+                hwc_mode = HWC_MODE_SCREEN0_GPU;
+             }
+             
+             hwc.setParameter(HWC_LAYER_SETMODE,hwc_mode);
+             repaintEverything();
+             //signalEvent();
+         }
+         else
+         {
+            return 0;
+         }
+    }
+    return ret;
+}
+
+int SurfaceFlinger::getDisplayProp(int cmd,int param0,int param1)
+{
+    const DisplayHardware& hw(graphicPlane(0).displayHardware());
+
+    return hw.getDispProp(cmd,param0,param1);
+}
 sp<ISurface> SurfaceFlinger::createSurface(
         ISurfaceComposerClient::surface_data_t* params,
         const String8& name,
@@ -2576,6 +2654,76 @@ sp<Layer> SurfaceFlinger::getLayer(const sp<ISurface>& sur) const
     return result;
 }
 
+void SurfaceFlinger::registerClient(const sp<ISurfaceClient>& client)
+{
+    Mutex::Autolock _l(mClientLock);
+
+    int pid = IPCThreadState::self()->getCallingPid();
+    if (mNotificationClients.indexOfKey(pid) < 0) {
+        sp<NotificationClient> notificationClient = new NotificationClient(this,
+                                                                            client,
+                                                                            pid);
+        ALOGV("registerClient() client %p, pid %d", notificationClient.get(), pid);
+
+        mNotificationClients.add(pid, notificationClient);
+
+        sp<IBinder> binder = client->asBinder();
+        binder->linkToDeath(notificationClient);
+    }
+}
+
+void SurfaceFlinger::removeNotificationClient(pid_t pid)
+{
+    Mutex::Autolock _l(mClientLock);
+
+    int index = mNotificationClients.indexOfKey(pid);
+    if (index >= 0) 
+    {
+        sp <NotificationClient> client = mNotificationClients.valueFor(pid);
+        ALOGV("removeNotificationClient() %p, pid %d", client.get(), pid);
+        mNotificationClients.removeItem(pid);
+    }
+}
+
+// audioConfigChanged_l() must be called with AudioFlinger::mLock held
+void SurfaceFlinger::NotifyFramebufferChanged_l(int event, int displayno)
+{
+    size_t size = mNotificationClients.size();
+    for (size_t i = 0; i < size; i++) 
+    {
+        mNotificationClients.valueAt(i)->client()->notifyCallback(event, displayno, 0,0,0);
+    }
+}
+
+void  SurfaceFlinger::NotifyFBConverted_l(unsigned int addr1,unsigned int addr2,int bufid,int64_t proctime)
+{
+	size_t size = mNotificationClients.size();
+    for (size_t i = 0; i < size; i++) 
+    {
+        mNotificationClients.valueAt(i)->client()->notifyCallback(SURFACECLIENT_MSG_CONVERTFB, addr1, addr2,bufid,proctime);
+    }
+}
+
+SurfaceFlinger::NotificationClient::NotificationClient(const sp<SurfaceFlinger>& surfaceflinger,
+                                                     const sp<ISurfaceClient>& client,
+                                                     pid_t pid)
+    : mSurfaceFlinger(surfaceflinger), mPid(pid), mClient(client)
+{
+}
+
+SurfaceFlinger::NotificationClient::~NotificationClient()
+{
+    mClient.clear();
+}
+
+void SurfaceFlinger::NotificationClient::binderDied(const wp<IBinder>& who)
+{
+    ALOGD("SurfaceFlinger::NotificationClient::binderDied, pid %d", mPid);
+    sp<NotificationClient> keep(this);
+    {
+        mSurfaceFlinger->removeNotificationClient(mPid);
+    }
+}
 // ---------------------------------------------------------------------------
 
 Client::Client(const sp<SurfaceFlinger>& flinger)

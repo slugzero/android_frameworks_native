@@ -27,11 +27,13 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
+#include "DisplayDispatcher.h"
 #include "GLExtensions.h"
 
 #include "DisplayHardware/DisplayHardwareBase.h"
 #include "HWComposer.h"
 #include "PowerHAL.h"
+#include <ui/DisplayCommand.h>
 
 namespace android {
 
@@ -102,7 +104,7 @@ public:
 
     // Hardware Composer
     HWComposer& getHwComposer() const;
-
+    sp<DisplayDispatcher>  mDisplayDispatcher;
     status_t compositionComplete() const;
 
     Rect getBounds() const {
@@ -110,6 +112,8 @@ public:
     }
     inline Rect bounds() const { return getBounds(); }
 
+    int setDispProp(int cmd,int param0,int param1,int param2) const;
+    int getDispProp(int cmd,int param0,int param1) const;
 private:
     virtual void onVSyncReceived(int dpy, nsecs_t timestamp);
     void init(uint32_t displayIndex) __attribute__((noinline));

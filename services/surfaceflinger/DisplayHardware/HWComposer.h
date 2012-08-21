@@ -81,6 +81,9 @@ public:
     size_t getLayerCount(int type) const;
 
     // Events handling ---------------------------------------------------------
+    int setParameter(uint32_t cmd,uint32_t value);
+
+    uint32_t getParameter(uint32_t cmd);
 
     enum {
         EVENT_VSYNC = HWC_EVENT_VSYNC

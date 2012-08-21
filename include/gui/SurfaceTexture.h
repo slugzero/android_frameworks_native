@@ -272,6 +272,7 @@ private:
     // before the outstanding accesses have completed.
     status_t syncForReleaseLocked(EGLDisplay dpy);
 
+    virtual status_t setCrop(const Rect& reg);
     // The default consumer usage flags that SurfaceTexture always sets on its
     // BufferQueue instance; these will be OR:d with any additional flags passed
     // from the SurfaceTexture user. In particular, SurfaceTexture will always
@@ -331,6 +332,7 @@ private:
     // browser's tile cache exceeds.
     const GLenum mTexTarget;
 
+    bool  mTransformExternal;
     // EGLSlot contains the information and object references that
     // SurfaceTexture maintains about a BufferQueue buffer slot.
     struct EGLSlot {

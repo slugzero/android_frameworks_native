@@ -57,6 +57,11 @@ LayerBase::LayerBase(SurfaceFlinger* flinger, DisplayID display)
 {
     const DisplayHardware& hw(flinger->graphicPlane(0).displayHardware());
     mFlags = hw.getFlags();
+    if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+    {
+        mDispWidth = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_WIDTH,0);
+        mDispHeight = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_VALID_HEIGHT,0);
+    }
 }
 
 LayerBase::~LayerBase()
@@ -294,6 +299,7 @@ void LayerBase::setGeometry(hwc_layer_t* hwcl)
     hwcl->flags = HWC_SKIP_LAYER;
     hwcl->transform = 0;
     hwcl->blending = HWC_BLENDING_NONE;
+    hwcl->format = 0;
 
     // this gives us only the "orientation" component of the transform
     const State& s(drawingState());
@@ -421,6 +427,7 @@ void LayerBase::drawWithOpenGL(const Region& clip) const
     if (!s.active.crop.isEmpty()) {
         crop = s.active.crop;
     }
+
     GLfloat left = GLfloat(crop.left) / GLfloat(s.active.w);
     GLfloat top = GLfloat(crop.top) / GLfloat(s.active.h);
     GLfloat right = GLfloat(crop.right) / GLfloat(s.active.w);
@@ -448,6 +455,71 @@ void LayerBase::drawWithOpenGL(const Region& clip) const
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glVertexPointer(2, GL_FLOAT, 0, mVertices);
     glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+       if(hw.setDispProp(DISPLAY_CMD_GETDISPLAYMODE,0,0,0) == DISPLAY_MODE_SINGLE_VAR_GPU)
+        {
+            const DisplayHardware& hw(graphicPlane(0).displayHardware());
+            
+            int app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+            int app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+            int vp_w = hw.getWidth() * mDispWidth / app_width;
+            int vp_h = hw.getHeight() * mDispHeight / app_height;
+            int scissor_w = hw.getWidth();
+            int scissor_h = hw.getHeight();
+
+            if(mDispWidth > app_width)
+            {
+                scissor_w = hw.getWidth()*mDispWidth/app_width;
+            }
+            if(mDispHeight > app_height)
+            {
+                scissor_h = hw.getHeight()*mDispHeight/app_height;
+            }
+            glScissor(0,0,scissor_w,scissor_h);
+            
+            if(graphicPlane(0).getOrientation() == 0)
+            {
+                glViewport(0, hw.getHeight() - vp_h, vp_w, vp_h);
+            }
+            else if(graphicPlane(0).getOrientation() == 1)
+            {
+                if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+                {
+                    glLoadIdentity();                
+                    glTranslatef(hw.getWidth()+hw.getHeight()-app_height,hw.getHeight()-hw.getWidth(),0.0f);
+                    glRotatef(90,0.0f,0.0f,1.0f);
+                    app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+                    app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+                    vp_w = hw.getWidth() * mDispWidth / app_width;
+                    vp_h = hw.getHeight() * mDispHeight / app_height;
+                }
+                glViewport(hw.getWidth() - vp_w, hw.getHeight() - vp_h, vp_w, vp_h);
+            }
+            else if(graphicPlane(0).getOrientation() == 2)
+            {
+                if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+                {
+                    glLoadIdentity();
+                    glTranslatef(hw.getWidth()+hw.getWidth()-app_width,app_height,0.0f);
+                    glRotatef(180,0.0f,0.0f,1.0f);
+                }
+                glViewport(hw.getWidth() - vp_w, 0, vp_w, vp_h);
+            }
+            else if(graphicPlane(0).getOrientation() == 3)
+            {
+                if(hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_OUTPUT_TYPE,0) != DISPLAY_DEVICE_LCD)
+                {
+                    glLoadIdentity();
+                    glTranslatef(0.0f,app_width,0.0f);
+                    glRotatef(270,0.0f,0.0f,1.0f);
+                    app_width = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_HEIGHT,0);
+                    app_height = hw.setDispProp(DISPLAY_CMD_GETDISPPARA,0,DISPLAY_APP_WIDTH,0);
+                    vp_w = hw.getWidth() * mDispWidth / app_width;
+                    vp_h = hw.getHeight() * mDispHeight / app_height;
+                }
+                glViewport(0, 0, vp_w, vp_h);
+            }
+            ALOGV("app_width:%d,app_height:%d,mDispWidth:%d,mDispHeight:%d,vp_w:%d,vp_h:%d\n",app_width,app_height,mDispWidth,mDispHeight,vp_w,vp_h);
+        }
     glDrawArrays(GL_TRIANGLE_FAN, 0, mNumVertices);
 
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -490,6 +562,11 @@ void LayerBase::dumpStats(String8& result, char* scratch, size_t SIZE) const {
 }
 
 void LayerBase::clearStats() {
+}
+void LayerBase::setDispSize(int w,int h)
+{
+    mDispWidth = w;
+    mDispHeight = h;
 }
 
 // ---------------------------------------------------------------------------

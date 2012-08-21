@@ -167,6 +167,20 @@ public:
     // connected to the specified client API.
     virtual status_t disconnect(int api);
 
+    virtual bool     IsHardwareRenderSupport();
+    virtual int      setParameter(uint32_t cmd,uint32_t value);
+
+    virtual uint32_t getParameter(uint32_t cmd);
+
+    virtual status_t setCrop(const Rect& reg);
+    virtual Rect getCrop();
+
+    virtual status_t setCurrentTransform(uint32_t transform);
+    virtual uint32_t getCurrentTransform();
+    virtual  status_t setCurrentScalingMode(int scalingMode);
+    virtual int getCurrentScalingMode();
+    virtual status_t setTimestamp(int64_t timestamp);
+    virtual int64_t getTimestamp();
     // dump our state in a String
     virtual void dump(String8& result) const;
     virtual void dump(String8& result, const char* prefix, char* buffer, size_t SIZE) const;
@@ -494,6 +508,21 @@ private:
 
     // mTransformHint is used to optimize for screen rotations
     uint32_t mTransformHint;
+    // mCurrentCrop is the crop rectangle that applies to the current texture.
+    // It gets set each time updateTexImage is called.
+    Rect mCurrentCrop;
+
+    // mCurrentTransform is the transform identifier for the current texture. It
+    // gets set each time updateTexImage is called.
+    uint32_t mCurrentTransform;
+
+    // mCurrentScalingMode is the scaling mode for the current texture. It gets
+    // set to each time updateTexImage is called.
+    uint32_t mCurrentScalingMode;
+
+    // mCurrentTimestamp is the timestamp for the current texture. It
+    // gets set each time updateTexImage is called.
+    int64_t mCurrentTimestamp;
 };
 
 // ----------------------------------------------------------------------------
