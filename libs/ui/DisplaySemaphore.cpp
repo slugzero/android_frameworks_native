@@ -27,7 +27,7 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <errno.h>
-#include "DisplaySemaphore.h"
+#include <ui/DisplaySemaphore.h>
 #include <cutils/log.h>
 
 #define LOG_NDEBUG 0

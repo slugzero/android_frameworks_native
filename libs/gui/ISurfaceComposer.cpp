@@ -30,7 +30,6 @@
 #include <gui/ISurfaceComposer.h>
 #include <gui/ISurfaceTexture.h>
 
-#include <gui/ISurfaceClient.h>
 #include <private/gui/LayerState.h>
 
 #include <ui/DisplayInfo.h>
@@ -120,6 +119,29 @@ public:
         *format = reply.readInt32();
         return reply.readInt32();
     }
+    
+    virtual int  setDisplayProp(int cmd,int param0,int param1,int param2)
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
+        data.writeInt32(cmd);
+        data.writeInt32(param0);
+        data.writeInt32(param1);
+        data.writeInt32(param2);
+        remote()->transact(BnSurfaceComposer::SET_DISPLAYPROP, data, &reply);
+        return reply.readInt32();
+    }
+    
+    virtual int  getDisplayProp(int cmd,int param0,int param1)
+    {
+        Parcel data, reply;
+        data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
+        data.writeInt32(cmd);
+        data.writeInt32(param0);
+        data.writeInt32(param1);
+        remote()->transact(BnSurfaceComposer::GET_DISPLAYPROP, data, &reply);
+        return reply.readInt32();
+    }
 
     virtual status_t turnElectronBeamOff(int32_t mode)
     {
@@ -193,36 +215,6 @@ public:
         }
         result = interface_cast<IDisplayEventConnection>(reply.readStrongBinder());
         return result;
-    }
-     virtual int  setDisplayProp(int cmd,int param0,int param1,int param2)
-    {
-        Parcel data, reply;
-        data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
-        data.writeInt32(cmd);
-        data.writeInt32(param0);
-        data.writeInt32(param1);
-        data.writeInt32(param2);
-        remote()->transact(BnSurfaceComposer::SET_DISPLAYPROP, data, &reply);
-        return reply.readInt32();
-    }
-    
-    virtual int  getDisplayProp(int cmd,int param0,int param1)
-    {
-        Parcel data, reply;
-        data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
-        data.writeInt32(cmd);
-        data.writeInt32(param0);
-        data.writeInt32(param1);
-        remote()->transact(BnSurfaceComposer::GET_DISPLAYPROP, data, &reply);
-        return reply.readInt32();
-    }
-
-    virtual void  registerClient(const sp<ISurfaceClient>& client)
-    {
-        Parcel data, reply;
-        data.writeInterfaceToken(ISurfaceComposer::getInterfaceDescriptor());
-        data.writeStrongBinder(client->asBinder());
-        remote()->transact(BnSurfaceComposer::REGISTER_CLIENT, data, &reply);
     }
 };
 
@@ -310,7 +302,7 @@ status_t BnSurfaceComposer::onTransact(
             reply->writeStrongBinder(connection->asBinder());
             return NO_ERROR;
         } break;
-         case SET_DISPLAYPROP:
+	case SET_DISPLAYPROP:
         {
             CHECK_INTERFACE(ISurfaceComposer, data, reply);
             int     cmd     = data.readInt32();
@@ -319,9 +311,7 @@ status_t BnSurfaceComposer::onTransact(
             int     param2  = data.readInt32();
             int res = setDisplayProp(cmd,param0,param1,param2);
             reply->writeInt32(res);
-        }
-            break;
-            
+        } break;          
         case GET_DISPLAYPROP:
         {
             CHECK_INTERFACE(ISurfaceComposer, data, reply);
@@ -330,17 +320,7 @@ status_t BnSurfaceComposer::onTransact(
             int     param1  = data.readInt32();
             int res = getDisplayProp(cmd,param0,param1);
             reply->writeInt32(res);
-        }
-            break;
-
-        case REGISTER_CLIENT:
-        {
-            CHECK_INTERFACE(ISurfaceComposer, data, reply);
-            sp<ISurfaceClient> client = interface_cast<ISurfaceClient>(data.readStrongBinder());
-            registerClient(client);
-            return NO_ERROR;
-        }
-            break;
+        } break;
         default:
             return BBinder::onTransact(code, data, reply, flags);
     }

@@ -17,27 +17,24 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/types.h>
-#include <hardware/hwcomposer.h>
+
 #include <utils/Errors.h>
 
 #include "Layer.h"
 #include "SurfaceTextureLayer.h"
 
+#include <hardware/hwcomposer.h>
+
 namespace android {
 // ---------------------------------------------------------------------------
 
-SurfaceTextureLayer::SurfaceTextureLayer(const sp<Layer>& layer)
+SurfaceTextureLayer::SurfaceTextureLayer()
 #ifdef QCOM_HARDWARE
     : BufferQueue(true, 3)
 #else
     : BufferQueue(true)
 #endif 
-{
-    usehwcomposer = false;
-    usehwinit     = false;
-
-    mLayer  = layer;
-}
+{}
 
 SurfaceTextureLayer::~SurfaceTextureLayer() {
 }
@@ -46,11 +43,10 @@ status_t SurfaceTextureLayer::connect(int api, QueueBufferOutput* output) {
     status_t err = BufferQueue::connect(api, output);
     if (err == NO_ERROR) {
         switch(api) {
-			case NATIVE_WINDOW_API_MEDIA_HW:
-			case NATIVE_WINDOW_API_CAMERA_HW:
-				usehwcomposer = true;
-				break;
-				
+	    case NATIVE_WINDOW_API_MEDIA_HW:
+            case NATIVE_WINDOW_API_CAMERA_HW:
+            	    usehwcomposer = true;
+            	    break;
             case NATIVE_WINDOW_API_MEDIA:
             case NATIVE_WINDOW_API_CAMERA:
                 // Camera preview and videos are rate-limited on the producer
@@ -80,7 +76,7 @@ status_t SurfaceTextureLayer::disconnect(int api)
 
     switch (api) 
     {
-		case NATIVE_WINDOW_API_MEDIA_HW:
+	case NATIVE_WINDOW_API_MEDIA_HW:
         case NATIVE_WINDOW_API_CAMERA_HW:
         {
             sp<Layer> layer(mLayer.promote());
@@ -88,8 +84,7 @@ status_t SurfaceTextureLayer::disconnect(int api)
             usehwinit     = false;
             if (layer != NULL) 
             {
-                Rect Crop(0,0,0,0);
-                layer->setTextureInfo(Crop, 0);
+                layer->setTextureInfo(0,0,0);
             }
         }
         default:
@@ -107,27 +102,24 @@ int SurfaceTextureLayer::setParameter(uint32_t cmd,uint32_t value)
     sp<Layer> layer(mLayer.promote());
     if (layer != NULL) 
     {
-    	if(cmd == HWC_LAYER_SETINITPARA)
-    	{
-    		layerinitpara_t  *layer_info;
-    		
-    		layer_info = (layerinitpara_t  *)value;
+	    	if(cmd == HWC_LAYER_SETINITPARA)
+	    	{
+	    		layerinitpara_t  *layer_info;
+	    		
+	    		layer_info = (layerinitpara_t  *)value;
 
-            if(IsHardwareRenderSupport())
+                if(IsHardwareRenderSupport())
+                {
+	    		    layer->setTextureInfo(layer_info->w,layer_info->h,layer_info->format);
+
+                    usehwinit = true;
+                }
+	    	}
+
+            if(usehwinit == true)
             {
-                //const Rect Crop(SurfaceTexture::getCurrentCrop());
-                const Rect Crop(0,0,layer_info->w,layer_info->h);
-                
-    		    layer->setTextureInfo(Crop,layer_info->format);
-
-                usehwinit = true;
+            	res = layer->setDisplayParameter(cmd,value);
             }
-    	}
-
-        if(usehwinit == true)
-        {
-        	res = layer->setDisplayParameter(cmd,value);
-        }
     }
     
     return res;
@@ -138,10 +130,6 @@ uint32_t SurfaceTextureLayer::getParameter(uint32_t cmd)
 {
     uint32_t res = 0;
     
-	if(cmd == NATIVE_WINDOW_CMD_GET_SURFACE_TEXTURE_TYPE) {
-		return 1;
-	}
-
     sp<Layer> layer(mLayer.promote());
     if (layer != NULL) 
     {

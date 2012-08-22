@@ -29,7 +29,6 @@
 
 #include <gui/IGraphicBufferAlloc.h>
 #include <gui/ISurfaceComposerClient.h>
-#include <gui/ISurfaceClient.h>
 
 namespace android {
 // ----------------------------------------------------------------------------
@@ -132,6 +131,9 @@ public:
 
     /* triggers screen on animation */
     virtual status_t turnElectronBeamOn(int32_t mode) = 0;
+    
+    virtual int      setDisplayProp(int cmd,int param0,int param1,int param2) = 0;
+    virtual int      getDisplayProp(int cmd,int param0,int param1) = 0;
 
     /* verify that an ISurfaceTexture was created by SurfaceFlinger.
      */
@@ -140,9 +142,6 @@ public:
 
     /* return an IDisplayEventConnection */
     virtual sp<IDisplayEventConnection> createDisplayEventConnection() = 0;
-    virtual int      setDisplayProp(int cmd,int param0,int param1,int param2) = 0;
-    virtual int      getDisplayProp(int cmd,int param0,int param1) = 0;
-    virtual void     registerClient(const sp<ISurfaceClient>& client) = 0;
 };
 
 // ----------------------------------------------------------------------------
@@ -164,9 +163,8 @@ public:
         TURN_ELECTRON_BEAM_ON,
         AUTHENTICATE_SURFACE,
         CREATE_DISPLAY_EVENT_CONNECTION,
-        SET_DISPLAYPROP,
-        GET_DISPLAYPROP,
-        REGISTER_CLIENT,
+	SET_DISPLAYPROP,
+	GET_DISPLAYPROP,
     };
 
     virtual status_t    onTransact( uint32_t code,

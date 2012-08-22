@@ -27,13 +27,13 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-#include "DisplayDispatcher.h"
 #include "GLExtensions.h"
 
 #include "DisplayHardware/DisplayHardwareBase.h"
 #include "HWComposer.h"
 #include "PowerHAL.h"
-#include <ui/DisplayCommand.h>
+
+#include <ui/DisplayDispatcher.h>
 
 namespace android {
 
@@ -104,6 +104,7 @@ public:
 
     // Hardware Composer
     HWComposer& getHwComposer() const;
+    
     sp<DisplayDispatcher>  mDisplayDispatcher;
     status_t compositionComplete() const;
 

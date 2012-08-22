@@ -20,6 +20,8 @@ LOCAL_SRC_FILES:= \
 	GraphicBuffer.cpp \
 	GraphicBufferAllocator.cpp \
 	GraphicBufferMapper.cpp \
+	DisplayDispatcher.cpp \
+	DisplaySemaphore.cpp \
 	PixelFormat.cpp \
 	Rect.cpp \
 	Region.cpp
@@ -27,8 +29,7 @@ LOCAL_SRC_FILES:= \
 LOCAL_SHARED_LIBRARIES := \
 	libcutils \
 	libutils \
-	libhardware \
-	libhardware_legacy \
+	libhardware
 
 ifneq ($(BOARD_FRAMEBUFFER_FORCE_FORMAT),)
 LOCAL_CFLAGS += -DFRAMEBUFFER_FORCE_FORMAT=$(BOARD_FRAMEBUFFER_FORCE_FORMAT)

@@ -288,9 +288,6 @@ public:
     // called from class SurfaceFlinger
     virtual ~LayerBase();
 
-    int             mDispWidth;
-    int             mDispHeight;
-    void            setDispSize(int w,int h);
 private:
     LayerBase(const LayerBase& rhs);
 };

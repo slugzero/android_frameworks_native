@@ -36,7 +36,6 @@
 #include <gui/IGraphicBufferAlloc.h>
 #include <gui/ISurfaceComposer.h>
 #include <gui/ISurfaceComposerClient.h>
-#include <gui/ISurfaceClient.h>
 
 #include "Barrier.h"
 #include "Layer.h"
@@ -182,11 +181,10 @@ public:
                                                             int orientation, uint32_t flags);
     virtual bool                        authenticateSurfaceTexture(const sp<ISurfaceTexture>& surface) const;
     virtual sp<IDisplayEventConnection> createDisplayEventConnection();
+    
     virtual int                         setDisplayProp(int cmd,int param0,int param1,int param2);
     virtual int                         getDisplayProp(int cmd,int param0,int param1);
-    virtual void                        registerClient(const sp<ISurfaceClient>& client);
-    virtual void                        NotifyFramebufferChanged_l(int event, int param = 0);
-    virtual void                        NotifyFBConverted_l(unsigned int addr1,unsigned int addr2,int bufid,int64_t proctime);
+
     virtual status_t captureScreen(DisplayID dpy,
             sp<IMemoryHeap>* heap,
             uint32_t* width, uint32_t* height,
@@ -229,14 +227,12 @@ public:
     sp<Layer> getLayer(const sp<ISurface>& sur) const;
 
     GLuint getProtectedTexName() const { return mProtectedTexName; }
+    
+    int         setDisplayParameter(uint32_t cmd,uint32_t  value);
+    uint32_t    getDisplayParameter(uint32_t cmd);
 
     // 0: surface doesn't need dithering, 1: use if necessary, 2: use permanently
     inline int  getUseDithering() const { return mUseDithering; }
-
-    int         setDisplayParameter(uint32_t cmd,uint32_t  value);
-
-    uint32_t    getDisplayParameter(uint32_t cmd);
-    void        removeNotificationClient(pid_t pid);
 
     class MessageDestroyGLTexture : public MessageBase {
         GLuint texture;
@@ -260,26 +256,6 @@ private:
     friend class LayerBaseClient;
     friend class Layer;
 
-    // --- Notification Client ---
-    class NotificationClient : public IBinder::DeathRecipient 
-    {
-        public:
-            NotificationClient(const sp<SurfaceFlinger>& audioFlinger,
-                                     const sp<ISurfaceClient>& client,
-                                     pid_t pid);
-            virtual             ~NotificationClient();
-            sp<ISurfaceClient>    client() { return mClient; }
-            // IBinder::DeathRecipient
-            virtual     void        binderDied(const wp<IBinder>& who);
-
-        private:
-            NotificationClient(const NotificationClient&);
-            NotificationClient& operator = (const NotificationClient&);
-
-            sp<SurfaceFlinger>          mSurfaceFlinger;
-            pid_t                       mPid;
-            sp<ISurfaceClient>          mClient;
-    };
     sp<ISurface> createSurface(
             ISurfaceComposerClient::surface_data_t* params,
             const String8& name,
@@ -420,7 +396,6 @@ private:
 
                 // access must be protected by mInvalidateLock
     mutable     Mutex                       mInvalidateLock;
-    mutable     Mutex                       mClientLock;
                 Region                      mInvalidateRegion;
 
                 // constant members (no synchronization needed for access)
@@ -442,7 +417,6 @@ private:
                 bool                        mHwWorkListDirty;
                 int32_t                     mElectronBeamAnimationMode;
                 Vector< sp<LayerBase> >     mVisibleLayersSortedByZ;
-                DefaultKeyedVector< pid_t, sp<NotificationClient> >    mNotificationClients;
 
 
                 // don't use a lock for these, we don't care
@@ -467,9 +441,6 @@ private:
    // only written in the main thread, only read in other threads
    volatile     int32_t                     mSecureFrameBuffer;
                 int                         mUseDithering;
-                int                         mDispWidth;
-                int                         mDispHeight;
-                int                         mSetDispSize;
 #if defined(BOARD_USES_SAMSUNG_HDMI) && defined(SAMSUNG_EXYNOS5250)
     SecHdmiClient *                         mHdmiClient;
 #endif

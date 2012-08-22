@@ -69,7 +69,7 @@ public:
     int			oldtexture_srch;
     int 		texture_format;
     int         setDisplayParameter(uint32_t cmd,uint32_t  value);
-    void        setTextureInfo(Rect Crop,int format);
+    void        setTextureInfo(int w,int h,int format);
     uint32_t    getDisplayParameter(uint32_t cmd);
 
     // LayerBase interface
