@@ -221,19 +221,9 @@ namespace android
 			{
 				mDisplayType0 	= DISPLAY_DEVICE_LCD;
 			}
-			else if(value0 == DISPLAY_DEVICE_TV)
-			{
-				mDisplayType0 	= DISPLAY_DEVICE_TV;
-				mDisplayFormat0 = value1;
-			}
 			else if(value0 == DISPLAY_DEVICE_HDMI)
 			{
 				mDisplayType0 	= DISPLAY_DEVICE_HDMI;
-				mDisplayFormat0 = value1;
-			}
-			else if(value0 == DISPLAY_DEVICE_VGA)
-			{
-				mDisplayType0 	= DISPLAY_DEVICE_VGA;
 				mDisplayFormat0 = value1;
 			}
 			else
@@ -246,11 +236,6 @@ namespace android
 			if(value0 == DISPLAY_DEVICE_LCD)
 			{
 				mDisplayType1 	= DISPLAY_DEVICE_LCD;
-			}
-			else if(value0 == DISPLAY_DEVICE_TV)
-			{
-				mDisplayType1 	= DISPLAY_DEVICE_TV;
-				mDisplayFormat1 = value1;
 			}
 			else if(value0 == DISPLAY_DEVICE_HDMI)
 			{
@@ -334,16 +319,6 @@ namespace android
 		if(mDevice)
 		{
 			return  mDevice->gethdmistatus(mDevice);
-		}
-		
-		return  -1;
-	}
-	
-	int DisplayDispatcher::getTvDacStatus(void)
-	{
-		if(mDevice)
-		{
-			return  mDevice->gettvdacstatus(mDevice);
 		}
 		
 		return  -1;
@@ -464,9 +439,6 @@ namespace android
             case DISPLAY_CMD_GETMAXWIDTHDISP:
                 return  getMaxWidthDisplay();
 
-            case DISPLAY_CMD_GETTVSTATUS:
-                return  getTvDacStatus();
-
             case DISPLAY_CMD_SETMASTERDISP:
                 return  setMasterDisplay(param0);
 
@@ -508,16 +480,7 @@ namespace android
         		return  ;
         	}
         }
-        else if(outputtype == DISPLAY_DEVICE_TV)
-        {
-        	plugin      = mDevice->gettvdacstatus(mDevice);
-        	if(plugin  == 0)
-        	{
-        		mThread->resetEvent();
-        		
-        		return  ;
-        	}
-        }
+
         
         if(mode == DISPLAY_MODE_DUALSAME)
         {
