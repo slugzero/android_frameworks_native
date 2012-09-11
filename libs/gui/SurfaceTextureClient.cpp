@@ -30,7 +30,7 @@
 #include <gui/SurfaceTextureClient.h>
 
 #include <private/gui/ComposerService.h>
-#ifdef QCOMHW
+#ifdef QCOM_HARDWARE
 #include <gralloc_priv.h>
 #endif
 #include <hardware/hwcomposer.h>
@@ -557,7 +557,7 @@ int SurfaceTextureClient::setUsage(uint32_t reqUsage)
     ALOGV("SurfaceTextureClient::setUsage");
     Mutex::Autolock lock(mMutex);
 
-#ifdef QCOMHW
+#ifdef QCOM_HARDWARE
     if (reqUsage & GRALLOC_USAGE_PRIVATE_EXTERNAL_ONLY) {
         //Set explicitly, since reqUsage may have other values.
         mReqExtUsage = GRALLOC_USAGE_PRIVATE_EXTERNAL_ONLY;
@@ -819,12 +819,12 @@ status_t SurfaceTextureClient::lock(
                     backBuffer->height == frontBuffer->height &&
                     backBuffer->format == frontBuffer->format);
 
-#ifdef QCOMHW
+#ifdef QCOM_HARDWARE
             int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
 #endif
             if (canCopyBack) {
                 // copy the area that is invalid and not repainted this round
-#ifdef QCOMHW
+#ifdef QCOM_HARDWARE
                 Mutex::Autolock lock(mMutex);
                 Region oldDirtyRegion;
                 for(int i = 0 ; i < NUM_BUFFER_SLOTS; i++ ) {
@@ -841,7 +841,7 @@ status_t SurfaceTextureClient::lock(
                 // if we can't copy-back anything, modify the user's dirty
                 // region to make sure they redraw the whole buffer
                 newDirtyRegion.set(bounds);
-#ifndef QCOMHW
+#ifndef QCOM_HARDWARE
                 mDirtyRegion.clear();
 #endif
                 Mutex::Autolock lock(mMutex);
@@ -853,7 +853,7 @@ status_t SurfaceTextureClient::lock(
 
             { // scope for the lock
                 Mutex::Autolock lock(mMutex);
-#ifdef QCOMHW
+#ifdef QCOM_HARDWARE
                 mSlots[backBufferSlot].dirtyRegion = newDirtyRegion;
 #else
                 int backBufferSlot(getSlotFromBufferLocked(backBuffer.get()));
@@ -865,7 +865,7 @@ status_t SurfaceTextureClient::lock(
 #endif
             }
 
-#ifndef QCOMHW
+#ifndef QCOM_HARDWARE
            mDirtyRegion.orSelf(newDirtyRegion);
 #endif
 
