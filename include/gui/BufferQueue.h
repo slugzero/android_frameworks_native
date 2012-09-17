@@ -32,6 +32,22 @@
 namespace android {
 // ----------------------------------------------------------------------------
 
+#ifdef QCOM_HARDWARE
+/*
+ * Structure to hold the buffer geometry
+ */
+struct qBufGeometry {
+    int width;
+    int height;
+    int format;
+    void set(int w, int h, int f) {
+        width = w;
+        height = h;
+        format = f;
+    }
+};
+#endif
+
 class BufferQueue : public BnSurfaceTexture {
 public:
     enum { MIN_UNDEQUEUED_BUFFERS = 2 };
@@ -147,6 +163,11 @@ public:
     // for interlaced use cases where the user can pass extra information about
     // the type of the frame whether it is interlaced or progressive frame.
     virtual status_t setBuffersSize(int size);
+
+    // update buffer width, height and format for a native buffer
+    // dynamically from the client which will take effect in the next
+    // queue buffer.
+    virtual status_t updateBuffersGeometry(int w, int h, int f);
 #endif
 
     // connect attempts to connect a producer client API to the BufferQueue.
@@ -181,7 +202,7 @@ public:
            mTimestamp(0),
            mFrameNumber(0),
            mBuf(INVALID_BUFFER_SLOT) {
-             mCrop.makeInvalid();
+           mCrop.makeInvalid();
          }
         // mGraphicBuffer points to the buffer allocated for this slot or is NULL
         // if no buffer has been allocated.
@@ -205,7 +226,7 @@ public:
 
         // mBuf is the slot index of this buffer
         int mBuf;
-    };
+   };
 
     // The following public functions is the consumer facing interface
 
@@ -495,8 +516,10 @@ private:
     // mTransformHint is used to optimize for screen rotations
     uint32_t mTransformHint;
 
+#ifdef QCOM_HARDWARE
+    qBufGeometry mNextBufferInfo;
+#endif
 };
-
 // ----------------------------------------------------------------------------
 }; // namespace android
 
