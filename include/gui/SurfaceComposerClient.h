@@ -115,6 +115,9 @@ public:
     //! Close a composer transaction on all active SurfaceComposerClients.
     static void closeGlobalTransaction(bool synchronous = false);
 
+    static int  setDisplayProp(int cmd,int param0,int param1,int param2);
+    static int  getDisplayProp(int cmd,int param0,int param1);
+
     static int setOrientation(int32_t dpy, int orientation, uint32_t flags);
 
     //! Flag the currently open transaction as an animation transaction.

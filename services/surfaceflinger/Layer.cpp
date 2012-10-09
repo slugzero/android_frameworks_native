@@ -162,6 +162,14 @@ wp<IBinder> Layer::getSurfaceTextureBinder() const
     return mSurfaceTexture->getBufferQueue()->asBinder();
 }
 
+void Layer::setTextureInfo(int w,int h,int format)
+{
+    texture_srcw 	= w;
+    texture_srch 	= h;
+    texture_format 	= format;
+    mCurrentCrop    = Rect(w,h);
+}
+
 status_t Layer::setBuffers( uint32_t w, uint32_t h,
                             PixelFormat format, uint32_t flags)
 {
@@ -766,6 +774,16 @@ uint32_t Layer::getEffectiveUsage(uint32_t usage) const
     }
     usage |= GraphicBuffer::USAGE_HW_COMPOSER;
     return usage;
+}
+
+int Layer::setDisplayParameter(uint32_t cmd,uint32_t  value)
+{
+    return mFlinger->setDisplayParameter(cmd,value);
+}
+
+uint32_t Layer::getDisplayParameter(uint32_t cmd)
+{
+    return mFlinger->getDisplayParameter(cmd);
 }
 
 void Layer::updateTransformHint(const sp<const DisplayDevice>& hw) const {

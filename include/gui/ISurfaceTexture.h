@@ -185,6 +185,11 @@ public:
     // This method will fail if the the SurfaceTexture is not currently
     // connected to the specified client API.
     virtual status_t disconnect(int api) = 0;
+    
+    virtual int      setParameter(uint32_t cmd,uint32_t value) = 0;
+
+    virtual uint32_t getParameter(uint32_t cmd) = 0;
+
 };
 
 // ----------------------------------------------------------------------------

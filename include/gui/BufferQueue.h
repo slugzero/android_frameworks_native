@@ -103,6 +103,10 @@ public:
     BufferQueue(bool allowSynchronousMode = true,
             const sp<IGraphicBufferAlloc>& allocator = NULL);
     virtual ~BufferQueue();
+    
+    virtual bool     IsHardwareRenderSupport();
+    virtual int      setParameter(uint32_t cmd,uint32_t value);
+    virtual uint32_t getParameter(uint32_t cmd);
 
     virtual int query(int what, int* value);
 

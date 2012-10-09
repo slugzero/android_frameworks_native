@@ -31,6 +31,7 @@
 #include <utils/Log.h>
 #include <gui/SurfaceTexture.h>
 #include <utils/Trace.h>
+#include <hardware/hwcomposer.h>
 
 // Macros for including the BufferQueue name in log messages
 #define ST_LOGV(x, ...) ALOGV("[%s] "x, mConsumerName.string(), ##__VA_ARGS__)
@@ -193,6 +194,41 @@ status_t BufferQueue::setBufferCount(int bufferCount) {
     }
 
     return OK;
+}
+
+bool BufferQueue::IsHardwareRenderSupport()
+{
+    if(mPixelFormat >= HWC_FORMAT_MINVALUE && mPixelFormat <= HWC_FORMAT_MAXVALUE)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+int BufferQueue::setParameter(uint32_t cmd,uint32_t value)
+{
+    if(cmd == HWC_LAYER_SETINITPARA)
+	{
+		layerinitpara_t  *layer_info;
+
+		layer_info = (layerinitpara_t  *)value;
+        mPixelFormat = layer_info->format;
+	}
+
+    if(IsHardwareRenderSupport())
+    {
+        return 100;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+uint32_t BufferQueue::getParameter(uint32_t cmd)
+{
+    return 0;
 }
 
 int BufferQueue::query(int what, int* outValue)
@@ -636,6 +672,8 @@ status_t BufferQueue::connect(int api, QueueBufferOutput* output) {
         case NATIVE_WINDOW_API_CPU:
         case NATIVE_WINDOW_API_MEDIA:
         case NATIVE_WINDOW_API_CAMERA:
+        case NATIVE_WINDOW_API_MEDIA_HW:
+        case NATIVE_WINDOW_API_CAMERA_HW:
             if (mConnectedApi != NO_CONNECTED_API) {
                 ST_LOGE("connect: already connected (cur=%d, req=%d)",
                         mConnectedApi, api);
@@ -677,6 +715,8 @@ status_t BufferQueue::disconnect(int api) {
             case NATIVE_WINDOW_API_CPU:
             case NATIVE_WINDOW_API_MEDIA:
             case NATIVE_WINDOW_API_CAMERA:
+            case NATIVE_WINDOW_API_MEDIA_HW:
+            case NATIVE_WINDOW_API_CAMERA_HW:
                 if (mConnectedApi == api) {
                     drainQueueAndFreeBuffersLocked();
                     mConnectedApi = NO_CONNECTED_API;

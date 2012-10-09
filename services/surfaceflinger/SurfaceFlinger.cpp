@@ -1490,6 +1490,28 @@ void SurfaceFlinger::handlePageFlip()
     mVisibleRegionsDirty |= visibleRegions;
 }
 
+int SurfaceFlinger::setDisplayParameter(uint32_t cmd,uint32_t  value)
+{
+    HWComposer& hwc(graphicPlane(0).displayDevice().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        return hwc.setParameter(cmd,value);
+    }
+
+    return NO_ERROR;
+}
+
+uint32_t SurfaceFlinger::getDisplayParameter(uint32_t cmd)
+{
+    HWComposer& hwc(graphicPlane(0).displayDevice().getHwComposer());
+    if (hwc.initCheck() == NO_ERROR) 
+    {
+        return hwc.getParameter(cmd);
+    }
+
+    return NO_ERROR;
+}
+
 void SurfaceFlinger::invalidateHwcGeometry()
 {
     mHwWorkListDirty = true;
@@ -1817,6 +1839,19 @@ void SurfaceFlinger::setTransactionState(
             }
         }
     }
+}
+
+int SurfaceFlinger::setDisplayProp(int cmd,int param0,int param1,int param2)
+{
+    const DisplayDevice& hw(graphicPlane(0).displayDevice());
+    return hw.setDispProp(cmd,param0,param1,param2);
+}
+
+int SurfaceFlinger::getDisplayProp(int cmd,int param0,int param1)
+{
+    const DisplayDevice& hw(graphicPlane(0).displayDevice());
+
+    return hw.getDispProp(cmd,param0,param1);
 }
 
 uint32_t SurfaceFlinger::setDisplayStateLocked(const DisplayState& s)

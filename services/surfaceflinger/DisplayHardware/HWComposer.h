@@ -97,6 +97,10 @@ public:
     // acquire hardware resources and unblank screen
     status_t acquire(int disp);
 
+    int setParameter(uint32_t cmd,uint32_t value);
+
+    uint32_t getParameter(uint32_t cmd);
+
     // reset state when an external, non-virtual display is disconnected
     void disconnectDisplay(int disp);
 

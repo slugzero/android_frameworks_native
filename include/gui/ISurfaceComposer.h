@@ -86,6 +86,9 @@ public:
      */
     virtual void bootFinished() = 0;
 
+    virtual int      setDisplayProp(int cmd,int param0,int param1,int param2) = 0;
+    virtual int      getDisplayProp(int cmd,int param0,int param1) = 0;
+
     /* verify that an ISurfaceTexture was created by SurfaceFlinger.
      */
     virtual bool authenticateSurfaceTexture(
@@ -131,6 +134,8 @@ public:
         UNBLANK,
         GET_DISPLAY_INFO,
         CONNECT_DISPLAY,
+	SET_DISPLAYPROP,
+	GET_DISPLAYPROP,
     };
 
     virtual status_t onTransact(uint32_t code, const Parcel& data,

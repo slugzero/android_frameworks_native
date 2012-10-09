@@ -32,6 +32,8 @@
 
 #include "Transform.h"
 
+#include <ui/DisplayDispatcher.h>
+
 struct ANativeWindow;
 
 namespace android {
@@ -116,7 +118,7 @@ public:
 
     void swapBuffers(HWComposer& hwc) const;
     status_t compositionComplete() const;
-    
+    sp<DisplayDispatcher>  mDisplayDispatcher;
     // called after h/w composer has completed its set() call
     void onSwapBuffersCompleted(HWComposer& hwc) const;
 
@@ -124,6 +126,9 @@ public:
         return Rect(mDisplayWidth, mDisplayHeight);
     }
     inline Rect bounds() const { return getBounds(); }
+
+    int setDispProp(int cmd,int param0,int param1,int param2) const;
+    int getDispProp(int cmd,int param0,int param1) const;
 
     void setDisplayName(const String8& displayName);
     const String8& getDisplayName() const { return mDisplayName; }
