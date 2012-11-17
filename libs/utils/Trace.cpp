@@ -36,6 +36,7 @@ void Tracer::changeCallback() {
 }
 
 void Tracer::init() {
+/*
     Mutex::Autolock lock(sMutex);
 
     if (!sIsReady) {
@@ -52,7 +53,7 @@ void Tracer::init() {
         }
 
         android_atomic_release_store(1, &sIsReady);
-    }
+    }*/
 }
 
 void Tracer::loadSystemProperty() {
