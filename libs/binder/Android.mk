@@ -38,6 +38,10 @@ sources := \
 
 LOCAL_PATH:= $(call my-dir)
 
+# Note about gingerbread compatibility : Require a global cflag,
+# several projects use binder's IMemory.h and MemoryHeapBase.h
+# COMMON_GLOBAL_CFLAGS += -DBINDER_COMPAT
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := libbinder
 LOCAL_SHARED_LIBRARIES := liblog libcutils libutils
