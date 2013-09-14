@@ -40,6 +40,11 @@ LOCAL_SHARED_LIBRARIES := \
 
 # Executed only on QCOM BSPs
 ifeq ($(TARGET_USES_QCOM_BSP),true)
+ifeq ($(TARGET_QCOM_DISPLAY_VARIANT),caf)
+    LOCAL_C_INCLUDES += hardware/qcom/display-caf/libgralloc
+else
+    LOCAL_C_INCLUDES += hardware/qcom/display/libgralloc
+endif
     LOCAL_CFLAGS += -DQCOM_BSP
 endif
 
@@ -57,6 +62,12 @@ ifeq ($(TARGET_BOARD_PLATFORM), tegra)
 endif
 ifeq ($(TARGET_BOARD_PLATFORM), tegra3)
 	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
+endif
+ifeq ($(TARGET_QCOM_DISPLAY_VARIANT), legacy)
+	LOCAL_CFLAGS += -DDONT_USE_FENCE_SYNC
+endif
+ifeq ($(TARGET_TOROPLUS_RADIO), true)
+	LOCAL_CFLAGS += -DTOROPLUS_RADIO
 endif
 
 include $(BUILD_SHARED_LIBRARY)

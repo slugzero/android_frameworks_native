@@ -106,7 +106,8 @@ SurfaceFlinger::SurfaceFlinger()
         mLastSwapBufferTime(0),
         mDebugInTransaction(0),
         mLastTransactionTime(0),
-        mBootFinished(false)
+        mBootFinished(false),
+        mUseDithering(0)
 {
     ALOGI("SurfaceFlinger is starting");
 
@@ -127,6 +128,7 @@ SurfaceFlinger::SurfaceFlinger()
             mDebugDDMS = 0;
         }
     }
+
     ALOGI_IF(mDebugRegion, "showupdates enabled");
     ALOGI_IF(mDebugDDMS, "DDMS debugging enabled");
 
@@ -482,6 +484,8 @@ void SurfaceFlinger::initializeGL(EGLDisplay display) {
     ALOGI("extensions: %s", extensions.getExtension());
     ALOGI("GL_MAX_TEXTURE_SIZE = %d", mMaxTextureSize);
     ALOGI("GL_MAX_VIEWPORT_DIMS = %d x %d", mMaxViewportDims[0], mMaxViewportDims[1]);
+
+    mMinColorDepth = r;
 }
 
 status_t SurfaceFlinger::readyToRun()
@@ -534,6 +538,11 @@ status_t SurfaceFlinger::readyToRun()
                 hw->acquireScreen();
             }
             mDisplays.add(token, hw);
+            PixelFormatInfo info;
+            getPixelFormatInfo(mHwc->getFormat(i), &info);
+            if (!mUseDithering && info.bitsPerPixel <= 16) {
+                mUseDithering = 1;
+            }
         }
     }
 
@@ -581,6 +590,10 @@ void SurfaceFlinger::startBootAnim() {
 
 uint32_t SurfaceFlinger::getMaxTextureSize() const {
     return mMaxTextureSize;
+}
+
+uint32_t SurfaceFlinger::getMinColorDepth() const {
+    return mMinColorDepth;
 }
 
 uint32_t SurfaceFlinger::getMaxViewportDims() const {
@@ -977,6 +990,26 @@ void SurfaceFlinger::setUpHWComposer() {
             sp<const DisplayDevice> hw(mDisplays[dpy]);
             const int32_t id = hw->getHwcDisplayId();
             if (id >= 0) {
+                // Get the layers in the current drawying state
+                const LayerVector& layers(mDrawingState.layersSortedByZ);
+                bool freezeSurfacePresent = false;
+                const size_t layerCount = layers.size();
+                char value[PROPERTY_VALUE_MAX];
+                property_get("sys.disable_ext_animation", value, "0");
+                if(atoi(value)) {
+                    for (size_t i = 0 ; i < layerCount ; ++i) {
+                        static int screenShotLen = strlen("ScreenshotSurface");
+                        const sp<Layer>& layer(layers[i]);
+                        if(!strncmp(layer->getName(), "ScreenshotSurface",
+                                    screenShotLen)) {
+                            // Screenshot layer is present, and animation in
+                            // progress
+                            freezeSurfacePresent = true;
+                            break;
+                        }
+                    }
+                }
+
                 const Vector< sp<Layer> >& currentLayers(
                     hw->getVisibleLayersSortedByZ());
                 const size_t count = currentLayers.size();
@@ -989,6 +1022,26 @@ void SurfaceFlinger::setUpHWComposer() {
                      */
                     const sp<Layer>& layer(currentLayers[i]);
                     layer->setPerFrameData(hw, *cur);
+                    if(freezeSurfacePresent) {
+                        // if freezeSurfacePresent, set ANIMATING flag
+                        cur->setAnimating(true);
+                    } else {
+                        const KeyedVector<wp<IBinder>, DisplayDeviceState>&
+                                                draw(mDrawingState.displays);
+                        size_t dc = draw.size();
+                        for (size_t i=0 ; i<dc ; i++) {
+                            if (draw[i].isMainDisplay()) {
+                                HWComposer& hwc(getHwComposer());
+                                if (hwc.initCheck() == NO_ERROR)
+                                    // Pass the current orientation to HWC
+                                    // which will be used to block animation
+                                    // on external
+                                    hwc.eventControl(HWC_DISPLAY_PRIMARY,
+                                            SurfaceFlinger::EVENT_ORIENTATION,
+                                            uint32_t(draw[i].orientation));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1065,6 +1118,12 @@ void SurfaceFlinger::postFramebuffer()
 void SurfaceFlinger::handleTransaction(uint32_t transactionFlags)
 {
     ATRACE_CALL();
+
+    // here we keep a copy of the drawing state (that is the state that's
+    // going to be overwritten by handleTransactionLocked()) outside of
+    // mStateLock so that the side-effects of the State assignment
+    // don't happen with mStateLock held (which can cause deadlocks).
+    State drawingState(mDrawingState);
 
     Mutex::Autolock _l(mStateLock);
     const nsecs_t now = systemTime();
