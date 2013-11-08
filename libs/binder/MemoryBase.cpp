@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "MemoryBase"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -52,4 +53,3 @@ extern "C" void _ZN7android10MemoryBaseC1ERKNS_2spINS_11IMemoryHeapEEElj(void* o
     ALOGW("Using temporary compatibility workaround for usage of MemoryBase "
           "private API. Please fix your application! But...you can try... No! It's Moto lib... okay:(");
 }
-
