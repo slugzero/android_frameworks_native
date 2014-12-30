@@ -47,6 +47,10 @@ ifeq ($(TARGET_BOARD_PLATFORM),s5pc110)
 	LOCAL_CFLAGS += -DHAS_CONTEXT_PRIORITY
 endif
 
+ifeq ($(TARGET_BOARD_PLATFORM),apq8084)
+	LOCAL_CFLAGS += -DAPQ8084
+endif
+
 ifeq ($(TARGET_DISABLE_TRIPLE_BUFFERING),true)
 	LOCAL_CFLAGS += -DTARGET_DISABLE_TRIPLE_BUFFERING
 endif
@@ -104,7 +108,6 @@ ifeq ($(TARGET_USES_QCOM_BSP), true)
     LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libgralloc
     LOCAL_C_INCLUDES += $(call project-path-for,qcom-display)/libqdutils
     LOCAL_SHARED_LIBRARIES += libqdutils
-    LOCAL_CFLAGS += -DQCOM_BSP
 endif
 
 LOCAL_MODULE:= libsurfaceflinger
