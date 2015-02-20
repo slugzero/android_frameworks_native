@@ -99,11 +99,39 @@ status_t SurfaceControl::setLayer(int32_t layer) {
     if (err < 0) return err;
     return mClient->setLayer(mHandle, layer);
 }
+status_t SurfaceControl::setBlur(float blur) {
+    status_t err = validate();
+    if (err < 0) return err;
+    return mClient->setBlur(mHandle, blur);
+}
+status_t SurfaceControl::setBlurMaskSurface(const sp<SurfaceControl>& maskSurface) {
+    status_t err = validate();
+    if (err < 0) return err;
+    return mClient->setBlurMaskSurface(mHandle, maskSurface != 0 ? maskSurface->mHandle : 0);
+}
+status_t SurfaceControl::setBlurMaskSampling(int32_t blurMaskSampling) {
+    status_t err = validate();
+    if (err < 0) return err;
+    return mClient->setBlurMaskSampling(mHandle, blurMaskSampling);
+}
+status_t SurfaceControl::setBlurMaskAlphaThreshold(float alpha) {
+    status_t err = validate();
+    if (err < 0) return err;
+    return mClient->setBlurMaskAlphaThreshold(mHandle, alpha);
+}
 status_t SurfaceControl::setPosition(float x, float y) {
     status_t err = validate();
     if (err < 0) return err;
     return mClient->setPosition(mHandle, x, y);
 }
+
+#ifdef ADD_LEGACY_SET_POSITION_SYMBOL
+extern "C" int _ZN7android14SurfaceControl11setPositionEff(float x, float y);
+extern "C" int _ZN7android14SurfaceControl11setPositionEii(int32_t x, int32_t y) {
+    return _ZN7android14SurfaceControl11setPositionEff((float)x, (float)y);
+}
+#endif
+
 status_t SurfaceControl::setSize(uint32_t w, uint32_t h) {
     status_t err = validate();
     if (err < 0) return err;

@@ -42,6 +42,35 @@ class GLES20RenderEngine : public RenderEngine {
     GLint mMaxTextureSize;
     GLuint mVpWidth;
     GLuint mVpHeight;
+    Rect mProjectionSourceCrop;
+    bool mProjectionYSwap;
+    Transform::orientation_flags mProjectionRotation;
+
+    /*
+     * Key is used to retrieve a Group in the cache.
+     * A Key is generated from width and height
+     */
+    class Key {
+        friend class GLES20RenderEngine;
+        int mWidth;
+        int mHeight;
+    public:
+        inline Key() : mWidth(0), mHeight(0) { }
+        inline Key(int width, int height) :
+                              mWidth(width), mHeight(height) { }
+        inline Key(const Key& rhs) : mWidth(rhs.mWidth),
+                                        mHeight(rhs.mHeight) { }
+
+        friend inline int strictly_order_type(const Key& lhs, const Key& rhs) {
+            if (lhs.mWidth != rhs.mWidth)
+                return ((lhs.mWidth < rhs.mWidth) ? 1 : 0);
+
+            if (lhs.mHeight != rhs.mHeight)
+                return ((lhs.mHeight < rhs.mHeight) ? 1 : 0);
+
+            return 0;
+        }
+    };
 
     struct Group {
         GLuint texture;
@@ -49,10 +78,13 @@ class GLES20RenderEngine : public RenderEngine {
         GLuint width;
         GLuint height;
         mat4 colorTransform;
+        Group() : width(0), height(0) { }
+        bool isValid() { return ((width != 0) && (height != 0)); }
     };
 
     Description mState;
     Vector<Group> mGroupStack;
+    DefaultKeyedVector<Key, Group> mGroupCache;
 
     virtual void bindImageAsFramebuffer(EGLImageKHR image,
             uint32_t* texName, uint32_t* fbName, uint32_t* status,
@@ -75,6 +107,9 @@ protected:
     virtual void setupFillWithColor(float r, float g, float b, float a);
     virtual void disableTexturing();
     virtual void disableBlending();
+    virtual void setupLayerMasking(const Texture& maskTexture, float alphaThreshold);
+    virtual void disableLayerMasking();
+
 #ifdef QCOM_BSP
     virtual void startTileComposition(int x , int y, int width,
           int height,bool preserve );
@@ -85,9 +120,16 @@ protected:
 
     virtual void beginGroup(const mat4& colorTransform);
     virtual void endGroup();
+    virtual void getGroup(Group& group);
+    virtual void putGroup(Group group);
 
     virtual size_t getMaxTextureSize() const;
     virtual size_t getMaxViewportDims() const;
+    virtual bool getProjectionYSwap() { return mProjectionYSwap; }
+    virtual size_t getViewportWidth() const { return mVpWidth; }
+    virtual size_t getViewportHeight() const { return mVpHeight; }
+    virtual Rect getProjectionSourceCrop() const { return mProjectionSourceCrop; }
+    virtual Transform::orientation_flags getProjectionRotation() const { return mProjectionRotation; }
 };
 
 // ---------------------------------------------------------------------------

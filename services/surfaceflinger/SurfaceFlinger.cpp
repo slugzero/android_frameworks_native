@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+//#define LOG_NDEBUG 0
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 
 #include <stdint.h>
@@ -70,6 +71,9 @@
 #include "EventThread.h"
 #include "Layer.h"
 #include "LayerDim.h"
+#ifdef WITH_UIBLUR
+#include "LayerBlur.h"
+#endif
 #include "SurfaceFlinger.h"
 
 #include "DisplayHardware/FramebufferSurface.h"
@@ -89,6 +93,7 @@
 #endif
 
 #define DISPLAY_COUNT       1
+#define MIN_DIRTYRECT_COUNT 5
 
 /*
  * DEBUG_SCREENSHOTS: set to true to check that screenshots are not all
@@ -132,6 +137,8 @@ const String16 sAccessSurfaceFlinger("android.permission.ACCESS_SURFACE_FLINGER"
 const String16 sReadFramebuffer("android.permission.READ_FRAME_BUFFER");
 const String16 sDump("android.permission.DUMP");
 
+static sp<Layer> lastSurfaceViewLayer;
+
 // ---------------------------------------------------------------------------
 // Initialize extendedMode to false
 #ifdef QCOM_BSP
@@ -163,7 +170,8 @@ SurfaceFlinger::SurfaceFlinger()
         mPrimaryHWVsyncEnabled(false),
         mHWVsyncAvailable(false),
         mDaltonize(false),
-        mHasColorMatrix(false)
+        mHasColorMatrix(false),
+        mActiveFrameSequence(0)
 {
     ALOGI("SurfaceFlinger is starting");
 
@@ -191,6 +199,8 @@ SurfaceFlinger::SurfaceFlinger()
     if(mGpuTileRenderEnable)
        ALOGV("DirtyRect optimization enabled for FULL GPU Composition");
     mUnionDirtyRect.clear();
+    mUnionDirtyRectPrev.clear();
+    mDRCount = 0;
 
     property_get("sys.disable_ext_animation", value, "0");
     mDisableExtAnimation = atoi(value) ? true : false;
@@ -447,7 +457,7 @@ void SurfaceFlinger::init() {
         DisplayDevice::DisplayType type((DisplayDevice::DisplayType)i);
         // set-up the displays that are already connected
         if (mHwc->isConnected(i) || type==DisplayDevice::DISPLAY_PRIMARY) {
-#if defined(QCOM_BSP) && !defined(APQ8084)
+#ifdef QCOM_BSP
             // query from hwc if the non-virtual display is secure.
             bool isSecure = mHwc->isSecure(i);;
 #else
@@ -643,7 +653,7 @@ status_t SurfaceFlinger::getDisplayConfigs(const sp<IBinder>& display,
         info.presentationDeadline =
                 hwConfig.refresh - SF_VSYNC_EVENT_PHASE_OFFSET_NS + 1000000;
 
-#if defined(QCOM_BSP) && !defined(APQ8084)
+#ifdef QCOM_BSP
         // set secure info based on the hwcConfig
         info.secure = hwConfig.secure;
 #else
@@ -861,7 +871,7 @@ void SurfaceFlinger::onHotplugReceived(int type, bool connected) {
     if (uint32_t(type) < DisplayDevice::NUM_BUILTIN_DISPLAY_TYPES) {
         Mutex::Autolock _l(mStateLock);
         if (connected) {
-#if defined(QCOM_BSP) && !defined(APQ8084)
+#ifdef QCOM_BSP
             // query from hwc if the connected display is secure
             bool secure = mHwc->isSecure(type);;
 #else
@@ -1224,6 +1234,10 @@ void SurfaceFlinger::setUpHWComposer() {
                                          uint32_t(draw[i].orientation));
                             }
                         }
+                        if(!strncmp(layer->getName(), "SurfaceView",
+                                    11)) {
+                            lastSurfaceViewLayer = layer;
+                        }
                     }
 #endif
                 }
@@ -1271,6 +1285,8 @@ void SurfaceFlinger::doComposition() {
 
             // repaint the framebuffer (if needed)
             doDisplayComposition(hw, dirtyRegion);
+
+            ++mActiveFrameSequence;
 
             hw->dirtyRegion.clear();
             hw->flip(hw->swapRegion);
@@ -1332,6 +1348,7 @@ void SurfaceFlinger::postFramebuffer()
     if (flipCount % LOG_FRAME_STATS_PERIOD == 0) {
         logFrameStats();
     }
+    ALOGV_IF(mFrameRateHelper.update(), "FPS: %d", mFrameRateHelper.get());
 }
 
 void SurfaceFlinger::handleTransaction(uint32_t transactionFlags)
@@ -2110,10 +2127,20 @@ bool SurfaceFlinger::computeTiledDr(const sp<const DisplayDevice>& hw) {
     HWComposer& hwc(getHwComposer());
 
     /* Compute and return the Union of Dirty Rects.
-     * Return false if the unionDR is fullscreen, as there is no benefit from
-     * preserving full screen.*/
-    return (hwc.canUseTiledDR(id, mUnionDirtyRect) &&
-          (mUnionDirtyRect != fullScreenRect));
+     * Return false in below conditions
+     * 1. if the unionDR is fullscreen, as there is no benefit from preserving full screen.
+     * 2. unionDR is not same for 5 consecutive frames.*/
+
+    bool ret = hwc.canUseTiledDR(id, mUnionDirtyRect);
+    if (mUnionDirtyRect == mUnionDirtyRectPrev) {
+        mDRCount++;
+    } else {
+        mDRCount = 0;
+        mUnionDirtyRectPrev = mUnionDirtyRect;
+    }
+    return (ret &&
+            (mDRCount > MIN_DIRTYRECT_COUNT) &&
+            (mUnionDirtyRect != fullScreenRect));
 
 }
 #endif
@@ -2543,6 +2570,41 @@ uint32_t SurfaceFlinger::setClientStateLocked(
                 flags |= eTransactionNeeded|eTraversalNeeded;
             }
         }
+        if (what & layer_state_t::eBlurChanged) {
+            ALOGV("eBlurChanged");
+            if (layer->setBlur(uint8_t(255.0f*s.blur+0.5f))) {
+                flags |= eTraversalNeeded;
+            }
+        }
+        if (what & layer_state_t::eBlurMaskSurfaceChanged) {
+            ALOGV("eBlurMaskSurfaceChanged");
+            sp<Layer> maskLayer = 0;
+            if (s.blurMaskSurface != 0) {
+                maskLayer = client->getLayerUser(s.blurMaskSurface);
+            }
+            if (maskLayer == 0) {
+                ALOGV("eBlurMaskSurfaceChanged. maskLayer == 0");
+            } else {
+                ALOGV("eBlurMaskSurfaceChagned. maskLayer.z == %d", maskLayer->getCurrentState().z);
+                if (maskLayer->isBlurLayer()) {
+                    ALOGE("Blur layer can not be used as blur mask surface");
+                    maskLayer = 0;
+                }
+            }
+            if (layer->setBlurMaskLayer(maskLayer)) {
+                flags |= eTraversalNeeded;
+            }
+        }
+        if (what & layer_state_t::eBlurMaskSamplingChanged) {
+            if (layer->setBlurMaskSampling(s.blurMaskSampling)) {
+                flags |= eTraversalNeeded;
+            }
+        }
+        if (what & layer_state_t::eBlurMaskAlphaThresholdChanged) {
+            if (layer->setBlurMaskAlphaThreshold(s.blurMaskAlphaThreshold)) {
+                flags != eTraversalNeeded;
+            }
+        }
         if (what & layer_state_t::eSizeChanged) {
             if (layer->setSize(s.w, s.h)) {
                 flags |= eTraversalNeeded;
@@ -2614,6 +2676,11 @@ status_t SurfaceFlinger::createLayer(
                     name, w, h, flags,
                     handle, gbp, &layer);
             break;
+        case ISurfaceComposerClient::eFXSurfaceBlur:
+            result = createBlurLayer(client,
+                    name, w, h, flags,
+                    handle, gbp, &layer);
+            break;
         default:
             result = BAD_VALUE;
             break;
@@ -2660,6 +2727,20 @@ status_t SurfaceFlinger::createDimLayer(const sp<Client>& client,
     *handle = (*outLayer)->getHandle();
     *gbp = (*outLayer)->getProducer();
     return NO_ERROR;
+}
+
+status_t SurfaceFlinger::createBlurLayer(const sp<Client>& client,
+        const String8& name, uint32_t w, uint32_t h, uint32_t flags,
+        sp<IBinder>* handle, sp<IGraphicBufferProducer>* gbp, sp<Layer>* outLayer)
+{
+#ifdef WITH_UIBLUR
+    *outLayer = new LayerBlur(this, client, name, w, h, flags);
+    *handle = (*outLayer)->getHandle();
+    *gbp = (*outLayer)->getProducer();
+    return NO_ERROR;
+#else
+    return BAD_VALUE;
+#endif
 }
 
 status_t SurfaceFlinger::onLayerRemoved(const sp<Client>& client, const sp<IBinder>& handle)
@@ -2899,13 +2980,18 @@ void SurfaceFlinger::dumpStatsLocked(const Vector<String16>& args, size_t& index
     if (name.isEmpty()) {
         mAnimFrameTracker.dumpStats(result);
     } else {
+        bool found = false;
         const LayerVector& currentLayers = mCurrentState.layersSortedByZ;
         const size_t count = currentLayers.size();
         for (size_t i=0 ; i<count ; i++) {
             const sp<Layer>& layer(currentLayers[i]);
             if (name == layer->getName()) {
+                found = true;
                 layer->dumpFrameStats(result);
             }
+        }
+        if (!found && !strncmp(name.string(), "SurfaceView", 11)) {
+            lastSurfaceViewLayer->dumpFrameStats(result);
         }
     }
 }
@@ -3649,6 +3735,8 @@ status_t SurfaceFlinger::captureScreenImplLocked(
                 reqWidth, reqHeight, hw_w, hw_h);
         return BAD_VALUE;
     }
+
+    ++mActiveFrameSequence;
 
     reqWidth  = (!reqWidth)  ? hw_w : reqWidth;
     reqHeight = (!reqHeight) ? hw_h : reqHeight;

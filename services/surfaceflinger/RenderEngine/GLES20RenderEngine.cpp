@@ -40,7 +40,7 @@ namespace android {
 // ---------------------------------------------------------------------------
 
 GLES20RenderEngine::GLES20RenderEngine() :
-        mVpWidth(0), mVpHeight(0) {
+        mVpWidth(0), mVpHeight(0), mProjectionRotation(Transform::ROT_0) {
 
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &mMaxTextureSize);
     glGetIntegerv(GL_MAX_VIEWPORT_DIMS, mMaxViewportDims);
@@ -68,6 +68,16 @@ GLES20RenderEngine::GLES20RenderEngine() :
 }
 
 GLES20RenderEngine::~GLES20RenderEngine() {
+    for (size_t i = 0; i < mGroupCache.size(); i++) {
+        Key key = mGroupCache.keyAt(i);
+        Group tmpGroup = mGroupCache.valueFor(key);
+        if (tmpGroup.isValid()) {
+            // free our fbo and texture
+            glDeleteFramebuffers(1, &tmpGroup.fbo);
+            glDeleteTextures(1, &tmpGroup.texture);
+        }
+    }
+    mGroupCache.clear();
 }
 
 
@@ -121,6 +131,9 @@ void GLES20RenderEngine::setViewportAndProjection(
     mState.setProjectionMatrix(m);
     mVpWidth = vpw;
     mVpHeight = vph;
+    mProjectionSourceCrop = sourceCrop;
+    mProjectionYSwap = yswap;
+    mProjectionRotation = rotation;
 }
 
 void GLES20RenderEngine::setupLayerBlending(
@@ -272,9 +285,36 @@ void GLES20RenderEngine::drawMesh(const Mesh& mesh) {
     }
 }
 
-void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
+void GLES20RenderEngine::putGroup(Group group) {
+    ATRACE_CALL();
+    Key key(group.width, group.height);
+    mGroupCache.add(key, group);
+}
 
+void GLES20RenderEngine::getGroup(Group& group) {
+    ATRACE_CALL();
+    // Check if Group is present
+    Key key(mVpWidth, mVpHeight);
+    group = mGroupCache.valueFor(key);
+    if (group.isValid()) {
+        glBindTexture(GL_TEXTURE_2D, group.texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, group.fbo);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                        GL_TEXTURE_2D, group.texture, 0);
+        // Remove item, we dont want to re-use
+        mGroupCache.removeItem(key);
+        return;
+    }
+
+    ATRACE_BEGIN("Group-Create");
+    // No cache, create one
     GLuint tname, name;
+
     // create the texture
     glGenTextures(1, &tname);
     glBindTexture(GL_TEXTURE_2D, tname);
@@ -282,18 +322,30 @@ void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth, mVpHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, mVpWidth, mVpHeight, 0,
+                                          GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     // create a Framebuffer Object to render into
     glGenFramebuffers(1, &name);
     glBindFramebuffer(GL_FRAMEBUFFER, name);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tname, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                               GL_TEXTURE_2D, tname, 0);
 
-    Group group;
     group.texture = tname;
     group.fbo = name;
     group.width = mVpWidth;
     group.height = mVpHeight;
+
+    ATRACE_END();
+}
+
+void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
+
+    ATRACE_CALL();
+    Group group;
+    getGroup(group);
+    if (!group.isValid())
+        ALOGE("BIG Problem, Group is invalid");
     group.colorTransform = colorTransform;
 
     mGroupStack.push(group);
@@ -301,7 +353,8 @@ void GLES20RenderEngine::beginGroup(const mat4& colorTransform) {
 
 void GLES20RenderEngine::endGroup() {
 
-    const Group group(mGroupStack.top());
+    ATRACE_CALL();
+    Group group(mGroupStack.top());
     mGroupStack.pop();
 
     // activate the previous render target
@@ -339,13 +392,35 @@ void GLES20RenderEngine::endGroup() {
     // reset color matrix
     mState.setColorMatrix(mat4());
 
-    // free our fbo and texture
-    glDeleteFramebuffers(1, &group.fbo);
-    glDeleteTextures(1, &group.texture);
+    putGroup(group);
 }
 
 void GLES20RenderEngine::dump(String8& result) {
     RenderEngine::dump(result);
+}
+
+void GLES20RenderEngine::setupLayerMasking(const Texture& maskTexture, float alphaThreshold) {
+    glActiveTexture(GL_TEXTURE0 + 1);
+    GLuint target = maskTexture.getTextureTarget();
+    glBindTexture(target, maskTexture.getTextureName());
+    GLenum filter = GL_NEAREST;
+    if (maskTexture.getFiltering()) {
+        filter = GL_LINEAR;
+    }
+    glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(target, GL_TEXTURE_MAG_FILTER, filter);
+    glTexParameteri(target, GL_TEXTURE_MIN_FILTER, filter);
+
+    if (alphaThreshold < 0) alphaThreshold = 0;
+    if (alphaThreshold > 1.0f) alphaThreshold = 1.0f;
+
+    mState.setMasking(maskTexture, alphaThreshold);
+    glActiveTexture(GL_TEXTURE0);
+}
+
+void GLES20RenderEngine::disableLayerMasking() {
+    mState.disableMasking();
 }
 
 // ---------------------------------------------------------------------------
